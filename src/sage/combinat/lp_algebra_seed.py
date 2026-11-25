@@ -115,7 +115,6 @@ class LPASeed(SageObject):
 
         # make a copy
         if isinstance(data, LPASeed):
-
             self._names = data._names
             self._base_ring = data._base_ring
             self._coefficients = data._coefficients
@@ -171,10 +170,8 @@ class LPASeed(SageObject):
 
         # take what input data we were given and try to use it to
         # construct polynomials
-        self._exchange_polys = []
-        for i in range(self._rank):
-            self._exchange_polys.append(
-                self._polynomial_ring(exchange_polys[i]))
+        self._exchange_polys = [self._polynomial_ring(exchange_polys[i])
+                                for i in range(self._rank)]
 
         self._coefficients = coefficients
         self._test_seed()
@@ -546,7 +543,17 @@ class LPASeed(SageObject):
 
     def _mutation_class_iter_bfs(self, depth=infinity, verbose=False,
                                  return_paths=False):
+        """
+        Breadth-first-search iteration over the mutation class.
 
+        EXAMPLES::
+
+            sage: x1, x2 = SR.var('x1,x2')
+            sage: S = LPASeed({x1: 1 + x2, x2: 1 + x1})
+            sage: t = S._mutation_class_iter_bfs()
+            sage: len(list(t))
+            5
+        """
         n = self._rank
         seeds_found = [self]
         current_depth = 0
@@ -604,9 +611,17 @@ class LPASeed(SageObject):
 
     def _mutation_class_iter_dfs(self, depth=infinity, verbose=False,
                                  return_paths=False):
+        """
+        Depth-first-search iteration over the mutation class.
 
-        # initialise
+        EXAMPLES::
 
+            sage: x1, x2 = SR.var('x1,x2')
+            sage: S = LPASeed({x1: 1 + x2, x2: 1 + x1})
+            sage: t = S._mutation_class_iter_dfs()
+            sage: len(list(t))
+            5
+        """
         n = self._rank
         seeds_found = [self]
         distances = [0]
@@ -619,7 +634,7 @@ class LPASeed(SageObject):
             dc += ' ' * (5 - len(dc))
             nr = str(len(seeds_found))
             nr += ' ' * (10 - len(nr))
-            print("depth: %s found: %s" % (dc, nr))
+            print(f"depth: {dc} found: {nr}")
 
         if return_paths:
             yield (self, [])
@@ -663,7 +678,7 @@ class LPASeed(SageObject):
                 dc += ' ' * (5 - len(dc))
                 nr = str(len(seeds_found))
                 nr += ' ' * (10 - len(nr))
-                print("depth: %s found: %s" % (dc, nr))
+                print(f"depth: {dc} found: {nr}")
 
     def mutation_class(self, depth=infinity, verbose=False,
                        return_paths=False, algorithm='BFS'):
@@ -1244,6 +1259,13 @@ class LPASeed(SageObject):
     def are_laurent_polys_trivial(self) -> bool:
         r"""
         Return whether this seed has Laurent polynomials with nontrivial denominators.
+
+        TESTS::
+
+            sage: x1, x2 = var('x1, x2')
+            sage: S = LPASeed({x1: 1 + x2, x2: 1 + x1})
+            sage: S.are_laurent_polys_trivial()
+            True
         """
         return all(poly.denominator() == 1 for poly in self.laurent_polys())
 
@@ -1253,8 +1275,15 @@ class LPASeed(SageObject):
 
         Completely probabilistic and may false positive; do not use in research setting.
         Warning: This could take a long time for some seeds!
-        """
 
+        TESTS::
+
+            sage: x1, x2 = var('x1, x2')
+            sage: S = LPASeed({x1: 1 + x2, x2: 1 + x1})
+            sage: S.is_mutation_infinite()
+            Mutation finite, has 5 seeds in mutation class
+            False
+        """
         MAX_DEGREE = 20  # when to decide a seed mutation class is too large based on degrees of exchange polynomials
         counter = 0
         for seed in self.mutation_class_iter():
@@ -1286,6 +1315,13 @@ class LPASeed(SageObject):
     def passes_rank_two_check(self) -> bool:
         r"""
         Check that, when restricting to any two variables, that the product of the degrees is strictly less than 4.
+
+        TESTS::
+
+            sage: x1, x2 = var('x1, x2')
+            sage: S = LPASeed({x1: 1 + x2, x2: 1 + x1})
+            sage: S.passes_rank_two_check()
+            True
         """
         N = self.rank()
         polys = self.exchange_polys()
@@ -1300,17 +1336,35 @@ class LPASeed(SageObject):
     def get_laurent_poly_denominators(self) -> list:
         r"""
         Return a list containing the denominators of the Laurent polynomials for this seed.
+
+        TESTS::
+
+            sage: x1, x2 = var('x1, x2')
+            sage: S = LPASeed({x1: 1 + x2, x2: 1 + x1})
+            sage: S.get_laurent_poly_denominators()
+            [1, 1]
         """
         return [poly.denominator() for poly in self.laurent_polys()]
 
     @staticmethod
     def create_generic_seed(vars, polys):
+        """
+        Return a generic seed with given variables and polynomials.
+
+        TESTS::
+
+            sage: x1, x2 = polygens(QQ, 'x1, x2')
+            sage: S = LPASeed.create_generic_seed([x1, x2], [1 + x2, 1 + x1])
+            sage: S
+            A seed with cluster variables [x1, x2] and
+            exchange polynomials [x2*a_0_0 + a_0_1, x1*a_1_0 + a_1_1]
+        """
         polys = list(polys)
         coefficients = []
         for i, pi in enumerate(polys):
             M = pi.monomials()
-            new_coeffs = list(var('a_%d_%d' % (i, j) for j in range(len(M))))
-            coefficients += new_coeffs
+            new_coeffs = [var(f'a_{i}_{j}') for j in range(len(M))]
+            coefficients.extend(new_coeffs)
             new_poly = 0
             for j in range(len(M)):
                 new_poly += new_coeffs[j] * M[j]
@@ -1324,6 +1378,12 @@ def _remove_repeat_indices(L) -> list:
     Remove mutations twice at the same index from the list of indices ``L``.
 
     This will result in a list with no consecutive entries equal.
+
+    EXAMPLES::
+
+        sage: from sage.combinat.lp_algebra_seed import _remove_repeat_indices
+        sage: _remove_repeat_indices([0,1,1,0,2,0,2])
+        [2, 0, 2]
 
     TESTS::
 
